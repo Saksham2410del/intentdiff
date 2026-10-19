@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>IntentDiff</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; color: #222; }
+    h1 { margin-bottom: 0; }
+    .muted { color: #666; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    textarea { width: 100%; height: 11rem; font-family: ui-monospace, monospace; font-size: 0.9rem; box-sizing: border-box; }
+    .verdict { padding: 0.8rem 1rem; border-radius: 6px; margin: 1rem 0; }
+    .MATCH { background: #e6f4ea; }
+    .MISMATCH, .BLOCKED { background: #fdecea; }
+    .UNVERIFIABLE { background: #fff4e5; }
+    .note { background: #f1f3f4; padding: 0.6rem 1rem; border-radius: 6px; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+    td, th { border-bottom: 1px solid #ddd; padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+    pre { background: #f6f8fa; padding: 0.6rem; overflow-x: auto; }
+    details { margin: 0.8rem 0; }
+  </style>
+</head>
+<body>
+
+{% macro changes_table(changes) %}
+<table>
+  <tr><th>table</th><th>key</th><th>action</th><th>before</th><th>after</th></tr>
+  {% for rec in changes.to_records(50) %}
+  <tr>
+    <td>{{ rec.table }}</td>
+    <td>{{ rec.key | join(", ") }}</td>
+    <td>{{ rec.action }}</td>
+    <td>{% if rec.before %}{% for c in rec.columns %}{{ c }} = {{ rec.before[c] }}<br>{% endfor %}{% endif %}</td>
+    <td>{% if rec.after %}{% for c in rec.columns %}{{ c }} = {{ rec.after[c] }}<br>{% endfor %}{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% if changes.total > 50 %}<p class="muted">showing 50 of {{ changes.total }} changed rows</p>{% endif %}
+{% endmacro %}
+
+<h1>IntentDiff</h1>
+<p class="muted">Checks that a SQL data fix changes exactly what its ticket asks for &mdash; before it runs.</p>
+
+<form method="get" action="/">
+  Example
+  <select name="example" onchange="this.form.submit()">
+    {% for id, ex in examples.items() %}
+    <option value="{{ id }}" {% if id == example %}selected{% endif %}>{{ ex.label }}</option>
+    {% endfor %}
+  </select>
+  {% if example in examples %}
+  &nbsp; Script
+  <select name="script" onchange="this.form.submit()">
+    {% for name in examples[example].scripts %}
+    <option {% if name == script_name %}selected{% endif %}>{{ name }}</option>
+    {% endfor %}
+  </select>
+  {% endif %}
+  <noscript><button>Load</button></noscript>
+</form>
+
+{% if message %}<p class="note">{{ message }}</p>{% endif %}
+
+<form method="post" action="/">
+  <input type="hidden" name="example" value="{{ example }}">
+  <input type="hidden" name="script_name" value="{{ script_name }}">
+  <div class="grid">
+    <label>Change ticket<textarea name="ticket">{{ ticket }}</textarea></label>
+    <label>Data-fix script<textarea name="sql">{{ sql }}</textarea></label>
+  </div>
+  <p>
+    <button name="action" value="check" {% if not has_key %}disabled{% endif %}>Check against ticket</button>
+    <button name="action" value="dry_run">Dry run only</button>
+    <span class="muted">
+      {% if has_key %}model: {{ model }}{% else %}GEMINI_API_KEY is not set, so only the dry run is available{% endif %}
+    </span>
+  </p>
+</form>
+
+{% if dry %}
+<h2>Dry run</h2>
+<p>The script would change: <b>{{ dry.summary() }}</b></p>
+{% if dry.total %}{{ changes_table(dry) }}{% endif %}
+{% endif %}
+
+{% if result %}
+<div class="verdict {{ result.verdict }}">
+  <b>{{ result.verdict }}</b>
+  <ul>{% for r in result.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+  {% for w in result.warnings %}<p>&#9888; {{ w }}</p>{% endfor %}
+</div>
+
+{% if waiting %}
+<form method="post" action="/answer" class="note">
+  <p><b>This review is paused.</b> Ask the requester the question(s) above and type their answer here.
+  The check continues from where it stopped.</p>
+  <input type="hidden" name="review_id" value="{{ review_id }}">
+  <textarea name="ticket" hidden>{{ ticket }}</textarea>
+  <textarea name="sql" hidden>{{ sql }}</textarea>
+  <textarea name="answer" style="height: 4rem" placeholder="e.g. it's client 2045, the one who called at 9:40" required></textarea>
+  <button>Continue with this answer</button>
+</form>
+{% endif %}
+
+{% if result.answers %}
+<p class="muted">Answers from the requester: {{ result.answers | join(" / ") }}</p>
+{% endif %}
+
+<div class="grid">
+  <div><b>Script changes:</b> {{ result.script_changes.summary() if result.script_changes else "-" }}</div>
+  <div><b>Ticket asks for:</b> {{ result.reference_changes.summary() if result.reference_changes else "-" }}</div>
+</div>
+
+{% if result.issues %}
+<h3>Differences</h3>
+<table>
+  {% for issue in result.issues[:100] %}<tr><td>{{ issue.describe() }}</td></tr>{% endfor %}
+</table>
+{% if result.issues | length > 100 %}<p class="muted">... and {{ result.issues | length - 100 }} more</p>{% endif %}
+{% endif %}
+
+{% if result.intents %}
+<details>
+  <summary>How the ticket was read (the model never saw the script)</summary>
+  {% if result.attempts > 1 %}
+  <p class="muted">The ticket was read {{ result.attempts }} times: earlier SQL failed on the copy and the model got the error back.</p>
+  {% endif %}
+  {% for spec in result.intents %}
+  <p><b>Reading {{ loop.index }}:</b> {{ spec.intent_summary }}</p>
+  <pre>{{ spec.reference_sql or "-- no SQL: the ticket is ambiguous" }}</pre>
+  {% endfor %}
+</details>
+{% endif %}
+
+{% if result.examples %}
+<details>
+  <summary>Similar past tickets shown to the model ({{ result.examples | join(", ") }})</summary>
+  {% for id in result.examples %}
+  <p><b>{{ id }}:</b> {{ past[id].ticket }}</p>
+  <pre>{{ past[id].fix }}</pre>
+  {% endfor %}
+</details>
+{% endif %}
+
+{% if result.script_changes and result.script_changes.total %}
+<details>
+  <summary>Rows changed by the script</summary>
+  {{ changes_table(result.script_changes) }}
+</details>
+{% endif %}
+
+<h3>Decision</h3>
+<form method="post" action="/decide">
+  <input type="hidden" name="review_id" value="{{ review_id }}">
+  <input type="hidden" name="sql_sha256" value="{{ sql_sha }}">
+  <textarea name="ticket" hidden>{{ ticket }}</textarea>
+  <textarea name="sql" hidden>{{ sql }}</textarea>
+  <input name="reviewer" placeholder="your name" required>
+  <input name="reason" placeholder="reason (required to approve anything but MATCH)" size="45">
+  <button name="decision" value="approve">Approve</button>
+  <button name="decision" value="reject">Reject</button>
+</form>
+<p class="muted">
+  Review #{{ review_id }} &middot; {{ result.stats.seconds }}s &middot;
+  {{ result.stats.input_tokens }} input / {{ result.stats.output_tokens }} output tokens
+</p>
+{% endif %}
+
+</body>
+</html>
