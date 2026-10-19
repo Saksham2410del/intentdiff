@@ -1,0 +1,197 @@
+# Past data-fix tickets and the scripts that were approved and run for them.
+#
+# This is the knowledge base for retrieval: when a new ticket comes in, the
+# most similar ones below are shown to the model as worked examples, so it
+# picks up how this team usually does things (closing an account also sets
+# closed_on, "remove the phone" means NULL and not '', ...).
+#
+# Written separately from eval/tickets.yaml. None of these reuse the
+# benchmark's IDs or values, so the examples can't hand the model an answer.
+
+- id: H01
+  ticket: |
+    Client 215 sent in a signed form with a new email address,
+    lucie.marek@centrum.cz. Please replace the old one.
+  fix: UPDATE client SET email = 'lucie.marek@centrum.cz' WHERE client_id = 215;
+
+- id: H02
+  ticket: |
+    Phone number change for client 509: +420 602 118 334
+  fix: UPDATE client SET phone = '+420 602 118 334' WHERE client_id = 509;
+
+- id: H03
+  ticket: |
+    GDPR erasure request from client 1120. Remove the phone number we hold for them.
+  fix: UPDATE client SET phone = NULL WHERE client_id = 1120;
+
+- id: H04
+  ticket: |
+    Client 3050 withdrew consent to be contacted by email and by phone.
+    Clear both from their record.
+  fix: UPDATE client SET email = NULL, phone = NULL WHERE client_id = 3050;
+
+- id: H05
+  ticket: |
+    Customer request: close account 2244, effective 1998-11-30.
+  fix: UPDATE account SET status = 'closed', closed_on = '1998-11-30' WHERE account_id = 2244;
+
+- id: H06
+  ticket: |
+    Account 3333 was closed by mistake during the year-end cleanup. Please reopen it.
+  fix: UPDATE account SET status = 'active', closed_on = NULL WHERE account_id = 3333;
+
+- id: H07
+  ticket: |
+    Accounts 19 and 1350 are now looked after by the Benesov branch (district 2).
+  fix: UPDATE account SET district_id = 2 WHERE account_id IN (19, 1350);
+
+- id: H08
+  ticket: |
+    The owner of account 980 would like weekly statements instead of monthly ones.
+  fix: UPDATE account SET frequency = 'weekly' WHERE account_id = 980;
+
+- id: H09
+  ticket: |
+    Cards 77 and 350 were upgraded to gold at the branch, but the system still
+    shows them as classic.
+  fix: UPDATE card SET type = 'gold' WHERE card_id IN (77, 350);
+
+- id: H10
+  ticket: |
+    Card 12 is still a junior card although the holder is an adult now.
+    Change it to classic.
+  fix: UPDATE card SET type = 'classic' WHERE card_id = 12;
+
+- id: H11
+  ticket: |
+    Loan 5170 has missed three payments. Collections asks to mark it running_in_debt.
+  fix: UPDATE loan SET status = 'running_in_debt' WHERE loan_id = 5170;
+
+- id: H12
+  ticket: |
+    Loan 5420 restructured: extend the term by 6 months. Monthly payment unchanged.
+  fix: UPDATE loan SET duration_months = duration_months + 6 WHERE loan_id = 5420;
+
+- id: H13
+  ticket: |
+    Every loan still marked running_ok that was granted before 1994-06-01 has
+    actually been repaid in full. Please mark those as finished_ok.
+  fix: |
+    UPDATE loan SET status = 'finished_ok'
+    WHERE status = 'running_ok' AND granted_on < '1994-06-01';
+
+- id: H14
+  ticket: |
+    The household standing order on account 44 should be 2500 CZK from now on.
+  fix: UPDATE standing_order SET amount = 2500 WHERE account_id = 44 AND purpose = 'household';
+
+- id: H15
+  ticket: |
+    Raise the household standing order on account 250 by 5%, rounded to whole crowns.
+  fix: |
+    UPDATE standing_order SET amount = ROUND(amount * 1.05)
+    WHERE account_id = 250 AND purpose = 'household';
+
+- id: H16
+  ticket: |
+    Customer cancelled standing order 29561 (insurance, account 97). Please delete it.
+  fix: DELETE FROM standing_order WHERE order_id = 29561;
+
+- id: H17
+  ticket: |
+    The loan on account 97 is now paid from another bank. Remove the loan_payment
+    standing order on account 97, nothing else.
+  fix: DELETE FROM standing_order WHERE account_id = 97 AND purpose = 'loan_payment';
+
+- id: H18
+  ticket: |
+    New standing order for account 512: insurance, 1200 CZK per payment, to
+    account 55021934 at bank AB.
+  fix: |
+    INSERT INTO standing_order (account_id, bank_to, account_to, amount, purpose)
+    VALUES (512, 'AB', '55021934', 1200, 'insurance');
+
+- id: H19
+  ticket: |
+    On account 19 the payments from 1996-08-01 to 1996-12-31 (both days included)
+    were booked as loan_payment, but they were household payments. Fix the purpose
+    on those transactions.
+  fix: |
+    UPDATE trans SET purpose = 'household'
+    WHERE account_id = 19 AND purpose = 'loan_payment'
+      AND date BETWEEN '1996-08-01' AND '1996-12-31';
+
+- id: H20
+  ticket: |
+    Transaction 4636 on account 19 was posted twice by the batch job.
+    Remove this duplicate.
+  fix: DELETE FROM trans WHERE trans_id = 4636;
+
+- id: H21
+  ticket: |
+    The SMS job fails on clients without a phone number. For clients born before
+    1930-01-01 who have no phone on file, store the branch hotline +420 800 100 100.
+  fix: |
+    UPDATE client SET phone = '+420 800 100 100'
+    WHERE birth_date < '1930-01-01' AND phone IS NULL;
+
+- id: H22
+  ticket: |
+    Accounts whose owner lives in district 30 should all get monthly statements.
+  fix: |
+    UPDATE account SET frequency = 'monthly'
+    WHERE frequency <> 'monthly'
+      AND account_id IN (
+          SELECT d.account_id FROM disp d JOIN client c ON c.client_id = d.client_id
+          WHERE d.type = 'owner' AND c.district_id = 30
+      );
+
+- id: H23
+  ticket: |
+    Account 4071 closes on 1998-10-31. Close the account and cancel all of its
+    standing orders.
+  fix: |
+    UPDATE account SET status = 'closed', closed_on = '1998-10-31' WHERE account_id = 4071;
+    DELETE FROM standing_order WHERE account_id = 4071;
+
+- id: H24
+  ticket: |
+    Junior cards issued at any time during 1996 have to be reissued as classic cards.
+    Update the card type on all of them.
+  fix: |
+    UPDATE card SET type = 'classic'
+    WHERE type = 'junior' AND issued_on BETWEEN '1996-01-01' AND '1996-12-31';
+
+- id: H25
+  ticket: |
+    Please move account 512 to the Kolin branch.
+  fix: |
+    UPDATE account SET district_id = (SELECT district_id FROM district WHERE name = 'Kolin')
+    WHERE account_id = 512;
+
+- id: H26
+  ticket: |
+    Account 97 has two standing orders without a purpose code. The customer cancelled
+    both of them, delete them please.
+  fix: DELETE FROM standing_order WHERE account_id = 97 AND purpose IS NULL;
+
+- id: H27
+  ticket: |
+    Client 4410 is recorded as female but is male. Please correct the gender.
+  fix: UPDATE client SET gender = 'M' WHERE client_id = 4410;
+
+- id: H28
+  ticket: |
+    Loan 5420: the monthly payment was renegotiated to 3150 CZK.
+  fix: UPDATE loan SET monthly_payment = 3150 WHERE loan_id = 5420;
+
+- id: H29
+  ticket: |
+    Client 2210's birth date was typed in as 1933-04-23. The correct date is 1933-04-28.
+  fix: UPDATE client SET birth_date = '1933-04-28' WHERE client_id = 2210;
+
+- id: H30
+  ticket: |
+    The Beroun branch (district 3) stops sending weekly statements. Switch its
+    weekly accounts to monthly.
+  fix: UPDATE account SET frequency = 'monthly' WHERE district_id = 3 AND frequency = 'weekly';
