@@ -24,6 +24,7 @@ class GeminiClient:
         self.cache_dir = Path(cache_dir)
         self.calls = 0
         self.cache_hits = 0
+        self.errors = 0          # calls that got no answer in the end
         self.input_tokens = 0
         self.output_tokens = 0
         self._client = None
@@ -60,13 +61,16 @@ class GeminiClient:
                 )
                 break
             except LLMError:
+                self.errors += 1
                 raise
             except Exception as e:  # network trouble, rate limits, bad key - all mean "no answer"
-                # Rate limits (429) and "model overloaded" (503) usually clear up within a
-                # minute, so wait and try again. A bad key or a bad request won't.
+                # Per-minute rate limits (429) and "model overloaded" (503) usually clear up
+                # within a minute, so wait and try again. A bad key, a bad request or a used-up
+                # daily quota won't.
                 code = getattr(e, "code", None)
                 temporary = not isinstance(code, int) or code == 429 or code >= 500
-                if not temporary or attempt == ATTEMPTS - 1:
+                if "PerDay" in str(e) or not temporary or attempt == ATTEMPTS - 1:
+                    self.errors += 1
                     raise LLMError(f"{type(e).__name__}: {e}") from e
                 time.sleep(5 * 2 ** attempt)  # 5, 10, 20, 40 s
 

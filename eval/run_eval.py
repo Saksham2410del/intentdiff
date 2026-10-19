@@ -223,9 +223,16 @@ def main():
     ]
     if llm is not None:
         header.append(f"- model: {llm.model}, API calls: {llm.calls}, cache hits: {llm.cache_hits}, "
-                      f"tokens: {llm.input_tokens} in / {llm.output_tokens} out")
+                      f"API errors: {llm.errors}, tokens: {llm.input_tokens} in / {llm.output_tokens} out")
+        if llm.errors:
+            # an API error turns into UNVERIFIABLE, which is safe in production but would
+            # quietly distort these numbers
+            header.append(f"- **NOT A VALID RUN: {llm.errors} calls failed (quota, network...).** "
+                          "Run it again - answers that worked are cached, so only the failed ones are retried.")
     (out_dir / "summary.md").write_text("\n".join(header) + "\n\n" + report + "\n", encoding="utf-8")
     print("\n" + report)
+    if llm is not None and llm.errors:
+        print(f"\nWARNING: {llm.errors} LLM calls failed - this run is not valid, run it again.")
     print(f"\nSaved to {out_dir}")
 
 
