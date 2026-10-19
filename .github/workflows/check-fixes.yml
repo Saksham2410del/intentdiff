@@ -1,0 +1,60 @@
+name: check data fixes
+
+# Runs on every pull request that adds or changes a fix in fixes/.
+# Needs a repository secret called GEMINI_API_KEY. Without it every fix comes
+# back UNVERIFIABLE - the check fails closed, it never passes by accident.
+
+on:
+  pull_request:
+    paths:
+      - "fixes/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  intentdiff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # the script diffs against the base branch
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      # The database isn't in the repo. Build it once and keep it in the cache.
+      - uses: actions/cache@v4
+        id: db
+        with:
+          path: data/bank.db
+          key: bank-db-${{ hashFiles('scripts/build_db.py', 'data/schema.sql') }}
+
+      - if: steps.db.outputs.cache-hit != 'true'
+        run: |
+          python scripts/download_data.py
+          python scripts/build_db.py
+
+      # Chroma's embedding model (~80 MB) - no need to download it on every run
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/chroma
+          key: chroma-all-MiniLM-L6-v2
+
+      - name: Check every changed fix against its ticket
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python scripts/check_pr_fixes.py "origin/${{ github.base_ref }}" > comment.md
+
+      - name: Post the result on the pull request
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat comment.md
+          gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md

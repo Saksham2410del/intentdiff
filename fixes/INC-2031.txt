@@ -1,0 +1,2 @@
+Client 5012 called the branch: the email we have for her is wrong.
+The correct address is jana.horakova@email.cz. Please update it.

@@ -1,0 +1,17 @@
+name: tests
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      # The tests build their own tiny database and use a fake LLM and fake
+      # embeddings, so they need no Berka files, no API key and no downloads.
+      - run: pytest -q
