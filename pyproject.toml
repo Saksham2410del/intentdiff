@@ -1,0 +1,9 @@
+[project]
+name = "intentdiff"
+version = "0.2.0"
+description = "Check that a SQL data fix changes exactly what its ticket asked for, before it runs."
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = [".", "tests"]
+testpaths = ["tests"]

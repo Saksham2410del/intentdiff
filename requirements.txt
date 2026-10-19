@@ -1,0 +1,17 @@
+sqlglot==30.23.0
+pydantic>=2.7
+pyyaml>=6.0
+google-genai>=2.0
+
+# workflow, retrieval and the MCP server
+langgraph>=1.2
+langgraph-checkpoint-sqlite>=3.1
+rank-bm25>=0.2.2
+chromadb>=1.5
+mcp>=2.3
+
+fastapi>=0.110
+uvicorn>=0.29
+jinja2>=3.1
+httpx>=0.27        # FastAPI's test client
+pytest>=8.0

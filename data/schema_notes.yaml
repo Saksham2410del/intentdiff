@@ -1,0 +1,64 @@
+# Plain-English notes about the bank schema. These go into the LLM prompt
+# next to the real table definitions, so keep them short and factual.
+
+district:
+  about: Czech districts with demographic data from the mid-90s.
+  columns:
+    name: "local district name, e.g. 'Hl.m. Praha' (Prague), 'Benesov', 'Kladno'"
+    region: "e.g. 'Prague', 'central Bohemia', 'south Moravia'"
+    avg_salary: average salary in CZK
+
+account:
+  about: One row per bank account. district_id is the branch that holds it.
+  columns:
+    frequency: "statement frequency: 'monthly', 'weekly' or 'after_transaction'"
+    created_on: date the account was opened (YYYY-MM-DD)
+    status: "'active' or 'closed'"
+    closed_on: closing date (YYYY-MM-DD), NULL while the account is active
+
+client:
+  about: One row per person. Clients are linked to accounts through disp.
+  columns:
+    birth_date: YYYY-MM-DD
+    gender: "'M' or 'F'"
+    district_id: where the client lives
+    email: can be NULL
+    phone: "format '+420 6xx xxx xxx', can be NULL"
+
+disp:
+  about: Links clients to accounts. Every account has exactly one owner and at most one extra user.
+  columns:
+    type: "'owner' or 'user'"
+
+card:
+  about: Payment cards. A card belongs to a disposition, i.e. to one client on one account.
+  columns:
+    type: "'junior', 'classic' or 'gold'"
+    issued_on: YYYY-MM-DD
+
+loan:
+  about: At most one loan per account.
+  columns:
+    granted_on: YYYY-MM-DD
+    amount: loan amount in CZK
+    duration_months: length of the loan in months
+    monthly_payment: CZK per month
+    status: "'finished_ok', 'finished_unpaid', 'running_ok' or 'running_in_debt'"
+
+standing_order:
+  about: Permanent payment orders set up on an account.
+  columns:
+    bank_to: two-letter code of the recipient's bank
+    account_to: recipient's account number
+    amount: CZK per payment
+    purpose: "'insurance', 'household', 'leasing', 'loan_payment' or NULL"
+
+trans:
+  about: Account transactions from 1993 to 1998, a bit over a million rows.
+  columns:
+    date: YYYY-MM-DD
+    type: "'credit' or 'debit'"
+    operation: "'card_withdrawal', 'cash_credit', 'collection_from_bank', 'cash_withdrawal', 'remittance_to_bank' or NULL"
+    amount: CZK
+    balance: account balance right after this transaction
+    purpose: "'insurance', 'statement_fee', 'interest', 'penalty_interest', 'household', 'pension', 'loan_payment' or NULL"

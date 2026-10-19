@@ -1,0 +1,20 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.env
+
+# the raw dataset and the databases built from it are not committed
+data/raw/
+data/*.db
+
+# LLM response cache
+.cache/
+
+# SQLite side files (checkpoints, review store)
+data/*.db-*
+
+# local editor/tool settings
+.claude/
+
+.ruff_cache/
